@@ -33,6 +33,15 @@ class DjanogoVulBear(LocalBear):
                                                   " from using MD5 for password storage, instead use something"
                                                   " like Argon2 or BCrypt", file=filename)
 
+        # Check for cursors in the code, this is used for exec SQL queries.
+        for line in file:
+            if "connection.cursor()" or "cursor()" in str.lower(line):
+                yield self.new_result(message="You are might be using a cursor for executing database queries here,"
+                                              " please check if the input you are receiving here is properly"
+                                              " sanitized, You might accomplish this by saving the inputs with "
+                                              "django's builtin ORM, this assures your inputs are properly escaped",
+                                      file=filename)
+
         # Looks at django views.py for security misconfigurations.
         if "views.py" in filename:
             for l, line in enumerate(file):
