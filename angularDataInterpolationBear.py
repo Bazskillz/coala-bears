@@ -7,11 +7,14 @@ from coalib.bears.LocalBear import LocalBear
 
 class angularJSversion(LocalBear):
     def run(self, filename, file):
-    	pattern = "[a-zA-Z]+\.[a-zA-Z]"
-    	ngpattern = "ng.[a-zA-Z]"
-    	curlypattern = "{{.+[a-zA-Z0-9]}}"
+    	pattern = "[a-zA-Z]+\.[a-zA-Z]" #find function usage in angular HTML view using regex (format: example.function)
+    	ngpattern = "ng.[a-zA-Z]" #find correct data interpolation method ng- to compare found function line with. (format: ng-bind="example")
+    	curlypattern = "{{.+[a-zA-Z0-9]}}" #find correct data interpolation method {{}} to compare found function line with (format= {{ variable }} )
 
-
+	"""
+	Open files given from Coala command line and look for the functions within the HTML views
+	if incorrect data interpolation is found raise coala to notify user
+	"""
     	with open(filename) as f:
     		for line in f:
     			if re.search(pattern, line):
