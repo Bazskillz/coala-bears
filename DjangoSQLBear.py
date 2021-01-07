@@ -116,7 +116,7 @@ class FunctionList(PythonFunction):
             if "cursor()" in line and "=" in line:
                 line = line.replace(" ","")
                 line = line.split("=")
-                curs[i] = line[0]
+                curs[pf.name] = line[0]
         #print(curs)
 
         for v in curs:
@@ -200,8 +200,11 @@ class DjangoBear(LocalBear):
                     for v in unusedVariables:
                         print(f"Unused variable: {v} in function {file[l]}")
                         logging.debug(f"Unused variable: {v} in function {file[l]}")
+                        yield self.new_result(message=f"Unused variable: {v} in function {file[l]}.", file=filename)
                     
                     curs = functionList.checkCursor(file[l])
+                    for c in curs:
+                        yield self.new_result(message=f"Cursor found in funcion {c}. Watch out for possible unsanitized inputs. (SQLi)", file=filename) 
 
             
 
@@ -210,6 +213,6 @@ class DjangoBear(LocalBear):
             #    print(i)
             #print(functionList.functions)
 
-            yield self.new_result(message="Choose option.", file=filename)
+            #yield self.new_result(message="Choose option.", file=filename)
 
 # coala -f taskmanager/views.py -d bears -b DjangoBear -L DEBUG --flush-cache
