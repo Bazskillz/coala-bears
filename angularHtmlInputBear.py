@@ -22,6 +22,9 @@ class angularHtmlCheckBear(LocalBear):
                 if 'href='   in line:
                     logging.debug("Found URL!")
                     yield self.new_result("Found URL`s in CODE:" + line + ".", file=filename)
+                elif 'src="http://'   in line:
+                    logging.debug("Found URL!")
+                    yield self.new_result("Found URL`s in CODE:" + line + ".", file=filename)
               	
                 else:
                     logging.debug("Checking line")
