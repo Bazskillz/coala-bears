@@ -1,8 +1,104 @@
+import logging
+import re
 from coalib.bears.LocalBear import LocalBear
 
 
-class DjanogoVulBear(LocalBear):
+class PythonFunction(object):
+    def __init__(self, name, start, end, segment, fname, variables):
+        self.name = name
+        self.start = start
+        self.end = end
+        self.segment = segment
+        self.fname = fname
+        self.variables = variables
 
+
+class FunctionList(PythonFunction):
+    def __init__(self):
+        self.functions = {}
+
+    def removeNextLine(self, name):
+        tName = name.replace('\n', '')
+        return tName
+
+    def add(self, name, start, end, file):
+        """
+        Adds a PythonFunction object to the funcions dict.
+
+        :param name: line string of the function name
+        :param start: start line of function
+        :param end: end line of function
+        """
+        name = self.removeNextLine(name)
+
+        fname = name.split()[1]
+        fname = re.search(r"^([^(]*)", fname).group(0)
+
+        variables = re.search(r"\(.*?\)", name).group(0)
+        variables = variables[1:-1]
+        variables = variables.replace(" ", "").split(",")
+
+        segment = file[start:end - 1]
+
+        pf = PythonFunction(name, start, end, segment, fname, variables)
+        self.functions[name] = pf
+
+    def get(self, name):
+        """
+
+        Retrieves a PythonFunction object from the funcions dict.
+
+        :param name: line of the function name
+
+        :returns FunctionList class object of given function
+        """
+
+        name = self.removeNextLine(name)
+        pf = self.functions[name]
+        return pf
+
+    def checkVariables(self, name):
+        """
+
+        Returns list of all unused variables of a function
+
+        :param name: line of the function name
+        """
+
+        pf = self.get(name)
+        temp_variables = pf.variables
+
+        for i, line in enumerate(pf.segment[1:]):
+            res = [ele for ele in pf.variables if (ele in line)]
+            for v in res:
+                if v in pf.variables:
+                    temp_variables.remove(v)
+
+        return temp_variables
+
+    def checkCursor(self, name):
+
+        pf = self.get(name)
+        curs = {}
+        for i, line in enumerate(pf.segment[1:]):
+            if "cursor()" in line and "=" in line:
+                line = line.replace(" ", "")
+                line = line.split("=")
+                curs[pf.name] = line[0]
+
+        for v in curs:
+            var = curs[v]
+            exec = var + ".execute("
+            for i, line in enumerate(pf.segment[1:]):
+                if exec in line:
+                    # i+1 because code skips the first line of the code (def ...)
+                    print(
+                        f"SQL query found in {pf.name} on line {pf.start + i + 1}. "
+                        f"Watch out for possible unsanitized inputs. (SQLi)")
+        return curs
+
+
+class DjanogoVulBear(LocalBear):
     def run(self, filename, file):
         """
         DjangoVulBear
@@ -10,6 +106,31 @@ class DjanogoVulBear(LocalBear):
 
         :param None:
         """
+
+        functionList = FunctionList()
+
+        def find_end(l):
+            """
+
+            Looks where a given function ends and returns the line number.
+
+            :param i: Indent of start of function.
+            :param l: Line number of start of function.
+
+            """
+            i = len(file[l]) - len(file[l].lstrip())
+
+            start = l + 1
+
+            for m, line in enumerate(file[start:], start=start):
+                indent = len(line) - len(line.lstrip())
+                if indent == i:
+                    m = m - 1
+
+                    while len(file[m]) <= 1:
+                        m = m - 1
+                    return m
+            return len(file) - 1
 
         # This part of the code will check for misconfigurations in the settings.py file of the django project.
         debug_misconfigurations = ["debug = true\n", "debug=true\n", "template_debug = true\n", "template_debug=true\n"]
@@ -33,23 +154,33 @@ class DjanogoVulBear(LocalBear):
                                                   " from using MD5 for password storage, instead use something"
                                                   " like Argon2 or BCrypt", file=filename)
 
-        # Check for cursors in the code, this is used for exec SQL queries.
-        for line in file:
-            if "connection.cursor()" or "cursor()" in str.lower(line):
-                yield self.new_result(message="You are might be using a cursor for executing database queries here,"
-                                              " please check if the input you are receiving here is properly"
-                                              " sanitized, You might accomplish this by saving the inputs with "
-                                              "django's builtin ORM, this assures your inputs are properly escaped",
-                                      file=filename)
-
-        # Looks at django views.py for security misconfigurations.
         if "views.py" in filename:
             for l, line in enumerate(file):
-                # Check for tag
                 if str.lower(line) == "@csrf_exempt\n":
-                    # Get function after csrf tag.
                     func = file[l+1]
                     func = func.replace("\n","")
                     msg = f"Function {func} has a csrf_exempt tag. Make sure this is not exploitable."
                     yield self.new_result(message=msg, file=filename)
 
+            start, end = 0, 0
+            for l, line in enumerate(file):
+                if str.lower(line).startswith("def "):
+
+                    m = find_end(l)
+
+                    functionList.add(file[l], l, m, file)
+
+                    unused_variables = functionList.checkVariables(file[l])
+                    for v in unused_variables:
+                        print(f"Unused variable: {v} in function {file[l]}")
+                        logging.debug(f"Unused variable: {v} in function {file[l]}")
+                        yield self.new_result(message=f"Unused variable: {v} in function {file[l]}.", file=filename)
+
+                    curs = functionList.checkCursor(file[l])
+                    for c in curs:
+                        yield self.new_result(
+                            message=f"Cursor found in function {c}. You are might be using a cursor for executing"
+                                    f" database queries here, please check if the input you are receiving here is"
+                                    f" properly sanitized, You might accomplish this by saving the inputs with"
+                                    f" django's builtin ORM, this assures your inputs are properly escaped",
+                            file=filename)
