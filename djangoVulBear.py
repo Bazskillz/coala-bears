@@ -94,7 +94,7 @@ class FunctionList(PythonFunction):
         return curs
 
 
-class DjanogoVulBear(LocalBear):
+class DjangoVulBear(LocalBear):
     def run(self, filename, file):
         """
         DjangoVulBear
