@@ -3,12 +3,12 @@ from coalib.bears.LocalBear import LocalBear
 
 
 class PythonFunction(object):
-    def __init__(self, name, start, end, segment, fname, variables):
+    def __init__(self, name, start, end, segment, f_name, variables):
         self.name = name
         self.start = start
         self.end = end
         self.segment = segment
-        self.fname = fname
+        self.f_name = f_name
         self.variables = variables
 
 
@@ -16,7 +16,8 @@ class FunctionList(PythonFunction):
     def __init__(self):
         self.functions = {}
 
-    def remove_next_line(self, name):
+    @staticmethod
+    def remove_next_line(name):
         t_name = name.replace('\n', '')
         return t_name
 
