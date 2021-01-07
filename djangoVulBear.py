@@ -1,4 +1,3 @@
-import logging
 import re
 from coalib.bears.LocalBear import LocalBear
 
@@ -17,22 +16,23 @@ class FunctionList(PythonFunction):
     def __init__(self):
         self.functions = {}
 
-    def removeNextLine(self, name):
-        tName = name.replace('\n', '')
-        return tName
+    def remove_next_line(self, name):
+        t_name = name.replace('\n', '')
+        return t_name
 
     def add(self, name, start, end, file):
         """
         Adds a PythonFunction object to the funcions dict.
 
+        :param file:
         :param name: line string of the function name
         :param start: start line of function
         :param end: end line of function
         """
-        name = self.removeNextLine(name)
+        name = self.remove_next_line(name)
 
-        fname = name.split()[1]
-        fname = re.search(r"^([^(]*)", fname).group(0)
+        f_name = name.split()[1]
+        f_name = re.search(r"^([^(]*)", f_name).group(0)
 
         variables = re.search(r"\(.*?\)", name).group(0)
         variables = variables[1:-1]
@@ -40,26 +40,23 @@ class FunctionList(PythonFunction):
 
         segment = file[start:end - 1]
 
-        pf = PythonFunction(name, start, end, segment, fname, variables)
+        pf = PythonFunction(name, start, end, segment, f_name, variables)
         self.functions[name] = pf
 
     def get(self, name):
         """
-
         Retrieves a PythonFunction object from the funcions dict.
 
         :param name: line of the function name
-
         :returns FunctionList class object of given function
         """
 
-        name = self.removeNextLine(name)
+        name = self.remove_next_line(name)
         pf = self.functions[name]
         return pf
 
-    def checkVariables(self, name):
+    def check_variables(self, name):
         """
-
         Returns list of all unused variables of a function
 
         :param name: line of the function name
@@ -76,8 +73,7 @@ class FunctionList(PythonFunction):
 
         return temp_variables
 
-    def checkCursor(self, name):
-
+    def check_cursor(self, name):
         pf = self.get(name)
         curs = {}
         for i, line in enumerate(pf.segment[1:]):
@@ -91,10 +87,9 @@ class FunctionList(PythonFunction):
             exec = var + ".execute("
             for i, line in enumerate(pf.segment[1:]):
                 if exec in line:
-                    # i+1 because code skips the first line of the code (def ...)
                     print(
                         f"SQL query found in {pf.name} on line {pf.start + i + 1}. "
-                        f"Watch out for possible unsanitized inputs. (SQLi)")
+                        f"Watch out for possible non-sanitised inputs. (SQLi)")
         return curs
 
 
@@ -104,19 +99,17 @@ class DjanogoVulBear(LocalBear):
         DjangoVulBear
         Checks your django project for common misconfigurations and vulnerable implementation.
 
-        :param None:
         """
 
-        functionList = FunctionList()
+        function_list = FunctionList()
 
         def find_end(l):
             """
 
             Looks where a given function ends and returns the line number.
 
-            :param i: Indent of start of function.
             :param l: Line number of start of function.
-
+            :return file end line
             """
             i = len(file[l]) - len(file[l].lstrip())
 
@@ -162,21 +155,18 @@ class DjanogoVulBear(LocalBear):
                     msg = f"Function {func} has a csrf_exempt tag. Make sure this is not exploitable."
                     yield self.new_result(message=msg, file=filename)
 
-            start, end = 0, 0
             for l, line in enumerate(file):
                 if str.lower(line).startswith("def "):
 
                     m = find_end(l)
 
-                    functionList.add(file[l], l, m, file)
+                    function_list.add(file[l], l, m, file)
 
-                    unused_variables = functionList.checkVariables(file[l])
+                    unused_variables = function_list.check_variables(file[l])
                     for v in unused_variables:
-                        print(f"Unused variable: {v} in function {file[l]}")
-                        logging.debug(f"Unused variable: {v} in function {file[l]}")
                         yield self.new_result(message=f"Unused variable: {v} in function {file[l]}.", file=filename)
 
-                    curs = functionList.checkCursor(file[l])
+                    curs = function_list.check_cursor(file[l])
                     for c in curs:
                         yield self.new_result(
                             message=f"Cursor found in function {c}. You are might be using a cursor for executing"
